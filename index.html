@@ -320,8 +320,8 @@ if(
   SUPABASE_PUBLISHABLE_KEY.startsWith('sb_publishable_')
 ){
   supabaseClient = window.supabase.createClient(
-    https://dwltnxslbwnporympzmi.supabase.co,
-    sb_publishable_7xls_Sgj48g8dGzsstO2ZA_njkA_HNu
+    SUPABASE_URL,
+    SUPABASE_PUBLISHABLE_KEY
   );
 
   loadMessages().then(subscribeToRoom);
