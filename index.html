@@ -1,5 +1,6 @@
 
 
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -38,7 +39,18 @@ input:focus{border-color:#a855f7}
 .profile{padding:12px;background:#201a32;border-radius:10px;margin-top:20px}
 .profile button{width:100%;margin-top:8px}
 #profileName{overflow-wrap:anywhere;color:#e9d5ff}
-@media(max-width:520px){aside{width:112px;padding:12px 6px}.logo{font-size:15px;padding:4px}.channel{font-size:12px;padding:10px 5px}.label{font-size:9px}header{padding:15px 10px}.welcome{margin:10px;padding:13px}#messages{padding:0 10px}form{padding:9px}form button{padding:10px}}
+#status{padding:7px 12px;font-size:12px;color:#c4b5fd}
+@media(max-width:520px){
+aside{width:112px;padding:12px 6px}
+.logo{font-size:15px;padding:4px}
+.channel{font-size:12px;padding:10px 5px}
+.label{font-size:9px}
+header{padding:15px 10px}
+.welcome{margin:10px;padding:13px}
+#messages{padding:0 10px}
+form{padding:9px}
+form button{padding:10px}
+}
 </style>
 </head>
 <body>
@@ -64,6 +76,7 @@ input:focus{border-color:#a855f7}
 <p>Seu cantinho para conversar, jogar e compartilhar ideias. 💜</p>
 <p>Escolha um nome e mande uma mensagem!</p>
 </section>
+<div id="status" role="status">Conectando ao chat...</div>
 <div id="messages" aria-live="polite"></div>
 <form id="chatForm">
 <div class="composer">
@@ -71,69 +84,254 @@ input:focus{border-color:#a855f7}
 </div>
 <button type="submit" aria-label="Enviar">➤</button>
 </form>
-<div class="note">Versão 2.0 · As mensagens ainda não são compartilhadas entre usuários.</div>
+<div class="note">EikeLabs Chat · Não compartilhe informações pessoais.</div>
 </main>
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-const messages=document.getElementById('messages');
-const input=document.getElementById('messageInput');
-const title=document.getElementById('roomTitle');
-const profileName=document.getElementById('profileName');
-let username=localStorage.getItem('eikelabs-username')||'Visitante';
-let room='geral';
-const history={};
-function updateProfile(){profileName.textContent='😎 '+username}
+// COLOQUE AQUI A URL E A CHAVE PUBLICA DO SEU PROJETO SUPABASE.
+const SUPABASE_URL = 'https://dwltnxslbwnporympzmi.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_7xls_Sgj48g8dGzsstO2ZA_njkA_HNu';
+
+const messagesEl = document.getElementById('messages');
+const input = document.getElementById('messageInput');
+const title = document.getElementById('roomTitle');
+const profileName = document.getElementById('profileName');
+const statusEl = document.getElementById('status');
+const rooms = ['geral','jogos','memes','tecnologia','projetos'];
+
+let username = localStorage.getItem('eikelabs-username') || 'Visitante';
+let room = 'geral';
+let supabaseClient = null;
+let channelSubscription = null;
+let seenIds = new Set();
+
+function setStatus(text){
+  statusEl.textContent = text;
+}
+
+function updateProfile(){
+  profileName.textContent = '😎 ' + username;
+}
+
 function chooseName(){
- const answer=prompt('Qual nome você quer usar no EikeLabs Chat?',username==='Visitante'?'':username);
- if(answer===null)return;
- const clean=answer.trim().slice(0,24);
- if(!clean){alert('Escreva um nome para continuar!');return}
- username=clean;
- localStorage.setItem('eikelabs-username',username);
- updateProfile();
- render();
+  const answer = prompt(
+    'Qual nome você quer usar no EikeLabs Chat?',
+    username === 'Visitante' ? '' : username
+  );
+
+  if(answer === null) return false;
+
+  const clean = answer.trim().slice(0,24);
+
+  if(!clean){
+    alert('Escreva um nome para continuar!');
+    return false;
+  }
+
+  username = clean;
+  localStorage.setItem('eikelabs-username',username);
+  updateProfile();
+  return true;
 }
-function addMessage(name,text,mine=false){
- const row=document.createElement('div');row.className='message';
- const avatar=document.createElement('div');avatar.className='avatar';avatar.textContent=mine?'😎':'💜';
- const body=document.createElement('div');
- const heading=document.createElement('div');
- const user=document.createElement('span');user.className='name';user.textContent=name;
- const time=document.createElement('span');time.className='time';time.textContent=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
- heading.append(user,time);
- const content=document.createElement('div');content.className='content';content.textContent=text;
- body.append(heading,content);row.append(avatar,body);messages.append(row);
+
+function addMessage(row){
+  if(seenIds.has(row.id)) return;
+  seenIds.add(row.id);
+
+  const item = document.createElement('div');
+  item.className = 'message';
+
+  const avatar = document.createElement('div');
+  avatar.className = 'avatar';
+  avatar.textContent = row.username === username ? '😎' : '💜';
+
+  const body = document.createElement('div');
+  const heading = document.createElement('div');
+
+  const user = document.createElement('span');
+  user.className = 'name';
+  user.textContent = row.username || 'Visitante';
+
+  const time = document.createElement('span');
+  time.className = 'time';
+  time.textContent = row.created_at
+    ? new Date(row.created_at).toLocaleTimeString('pt-BR',{
+        hour:'2-digit',minute:'2-digit'
+      })
+    : '';
+
+  heading.append(user,time);
+
+  const content = document.createElement('div');
+  content.className = 'content';
+  content.textContent = row.content || '';
+
+  body.append(heading,content);
+  item.append(avatar,body);
+  messagesEl.append(item);
 }
-function render(){
- messages.replaceChildren();
- if(!history[room]||history[room].length===0){
-  addMessage('EikeLabs','Opa! Bem-vindo ao canal #'+room+'! 💜');
-  addMessage('Sistema','Escolha seu nome e teste uma mensagem.');
- }else history[room].forEach(m=>addMessage(m.name,m.text,m.mine));
- messages.scrollTop=messages.scrollHeight;
+
+async function loadMessages(){
+  if(!supabaseClient) return;
+
+  setStatus('Carregando mensagens de #' + room + '...');
+
+  const {data,error} = await supabaseClient
+    .from('messages')
+    .select('id,created_at,username,content,channel')
+    .eq('channel',room)
+    .order('created_at',{ascending:true})
+    .limit(100);
+
+  if(error){
+    console.error(error);
+    setStatus('Erro ao carregar. Confira as políticas RLS.');
+    return;
+  }
+
+  messagesEl.replaceChildren();
+  seenIds = new Set();
+
+  if(!data || data.length === 0){
+    const empty = document.createElement('div');
+    empty.className = 'content';
+    empty.style.color = '#8d84a5';
+    empty.textContent =
+      'Ainda não há mensagens neste canal. Seja o primeiro! 💜';
+    messagesEl.append(empty);
+  }else{
+    data.forEach(addMessage);
+  }
+
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+  setStatus('Conectado · #' + room);
 }
-document.getElementById('changeName').addEventListener('click',chooseName);
-document.getElementById('chatForm').addEventListener('submit',e=>{
- e.preventDefault();
- const text=input.value.trim();
- if(!text)return;
- if(username==='Visitante'){chooseName();if(username==='Visitante')return}
- if(!history[room])history[room]=[];
- history[room].push({name:username,text,mine:true});
- input.value='';
- render();
- input.focus();
+
+function subscribeToRoom(){
+  if(!supabaseClient) return;
+
+  if(channelSubscription){
+    supabaseClient.removeChannel(channelSubscription);
+  }
+
+  channelSubscription = supabaseClient
+    .channel('messages-' + room)
+    .on(
+      'postgres_changes',
+      {
+        event:'INSERT',
+        schema:'public',
+        table:'messages',
+        filter:'channel=eq.' + room
+      },
+      payload => {
+        const row = payload.new;
+
+        if(room !== row.channel) return;
+
+        const empty = messagesEl.querySelector('.content');
+
+        if(empty && empty.textContent.startsWith('Ainda não há mensagens')){
+          messagesEl.replaceChildren();
+        }
+
+        const atBottom =
+          messagesEl.scrollHeight - messagesEl.scrollTop -
+          messagesEl.clientHeight < 80;
+
+        addMessage(row);
+
+        if(atBottom){
+          messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+      }
+    )
+    .subscribe(state => {
+      if(state === 'SUBSCRIBED'){
+        setStatus('Conectado em tempo real · #' + room);
+      }else if(state === 'CHANNEL_ERROR' || state === 'TIMED_OUT'){
+        setStatus('Erro no Realtime. Confira a publicação do banco.');
+      }
+    });
+}
+
+document.getElementById('changeName')
+  .addEventListener('click',chooseName);
+
+document.getElementById('chatForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+
+  const text = input.value.trim();
+  if(!text) return;
+
+  if(!supabaseClient){
+    setStatus('Configure a URL e a chave pública no código.');
+    return;
+  }
+
+  if(username === 'Visitante' && !chooseName()) return;
+
+  const button = e.submitter || e.target.querySelector('button[type="submit"]');
+  button.disabled = true;
+  setStatus('Enviando mensagem...');
+
+  const {error} = await supabaseClient.from('messages').insert({
+    username:username.slice(0,24),
+    content:text.slice(0,500),
+    channel:room
+  });
+
+  button.disabled = false;
+
+  if(error){
+    console.error(error);
+    setStatus('Não enviou. Confira a política INSERT.');
+    return;
+  }
+
+  input.value = '';
+  input.focus();
+  setStatus('Mensagem enviada! 💜');
 });
-document.querySelectorAll('.channel').forEach(el=>el.addEventListener('click',()=>{
- document.querySelectorAll('.channel').forEach(c=>c.classList.remove('active'));
- el.classList.add('active');
- room=el.dataset.room;
- title.textContent=room;
- render();
-}));
+
+document.querySelectorAll('.channel').forEach(el=>{
+  el.addEventListener('click',async()=>{
+    document.querySelectorAll('.channel').forEach(c=>{
+      c.classList.remove('active');
+    });
+
+    el.classList.add('active');
+    room = el.dataset.room;
+    title.textContent = room;
+
+    messagesEl.replaceChildren();
+    await loadMessages();
+    subscribeToRoom();
+  });
+});
+
 updateProfile();
-render();
+
+if(
+  window.supabase &&
+  SUPABASE_URL.startsWith('https://') &&
+  SUPABASE_PUBLISHABLE_KEY.startsWith('sb_publishable_')
+){
+  supabaseClient = window.supabase.createClient(
+    https://dwltnxslbwnporympzmi.supabase.co,
+    sb_publishable_7xls_Sgj48g8dGzsstO2ZA_njkA_HNu
+  );
+
+  loadMessages().then(subscribeToRoom);
+}else{
+  setStatus('Falta configurar a URL e a chave pública do Supabase.');
+  messagesEl.textContent =
+    'Configure a conexão para mostrar as mensagens aqui.';
+}
 </script>
 </body>
 </html>
+
 
