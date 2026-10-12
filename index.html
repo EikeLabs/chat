@@ -1,0 +1,104 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EikeLabs Chat</title>
+<style>
+:root{--bg:#0b0b14;--panel:#141422;--purple:#a855f7;--text:#f4efff;--muted:#aaa1c4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px Arial,sans-serif}
+.app{display:flex;height:100dvh}
+aside{width:230px;flex-shrink:0;background:var(--panel);padding:20px 12px;border-right:1px solid #302344}
+.logo{font-size:21px;font-weight:bold;color:#c084fc;padding:8px;margin-bottom:28px}
+.label{font-size:11px;color:var(--muted);margin:20px 8px 8px}
+.channel{padding:12px;border-radius:9px;cursor:pointer;color:#ccc3e8;margin:3px 0}
+.channel:hover,.channel.active{background:#51249a;color:white}
+main{display:flex;flex:1;flex-direction:column;min-width:0}
+header{padding:19px;border-bottom:1px solid #302344;font-weight:bold}
+header span{color:#c084fc}
+.welcome{margin:20px;padding:20px;border-radius:14px;background:linear-gradient(120deg,#301553,#17172c);border:1px solid #493064}
+.welcome h2{margin:0 0 10px}
+.welcome p{color:#d0c5e8;line-height:1.5;margin:4px 0}
+#messages{flex:1;overflow:auto;padding:0 20px}
+.message{display:flex;gap:12px;margin:18px 0;overflow-wrap:anywhere}
+.avatar{width:40px;height:40px;flex-shrink:0;border-radius:50%;display:grid;place-items:center;background:#5426a0;font-size:21px}
+.name{font-weight:bold;color:#c084fc}
+.time{font-size:11px;color:#8d84a5;margin-left:8px}
+.content{margin-top:7px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
+form{display:flex;gap:10px;padding:15px;border-top:1px solid #302344}
+input{min-width:0;flex:1;background:#1b192b;border:1px solid #443258;color:white;padding:14px;border-radius:10px;font-size:15px}
+button{background:#873ce0;border:0;color:white;padding:0 20px;border-radius:10px;font-size:19px;cursor:pointer}
+button:hover{background:#a855f7}
+.note{text-align:center;color:#8d84a5;font-size:11px;padding:0 10px 10px}
+@media(max-width:520px){aside{width:115px;padding:12px 6px}.logo{font-size:15px;padding:4px}.channel{font-size:12px;padding:10px 6px}.label{font-size:9px}header{padding:16px 10px}.welcome{margin:10px;padding:13px}.welcome h2{font-size:18px}#messages{padding:0 10px}form{padding:10px}button{padding:0 13px}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside>
+<div class="logo">💜 EikeLabs</div>
+<div class="label">CANAIS DE TEXTO</div>
+<div class="channel active" data-room="geral"># geral</div>
+<div class="channel" data-room="jogos"># jogos</div>
+<div class="channel" data-room="memes"># memes</div>
+<div class="channel" data-room="tecnologia"># tecnologia</div>
+<div class="channel" data-room="projetos"># projetos</div>
+<div class="label">SUA COMUNIDADE</div>
+<div style="padding:8px;color:#c084fc">✦ Seja bem-vindo!</div>
+</aside>
+<main>
+<header><span>#</span> <b id="roomTitle">geral</b></header>
+<section class="welcome">
+<h2>🎉 Bem-vindo ao EikeLabs Chat!</h2>
+<p>Seu cantinho para conversar, jogar e compartilhar ideias. 💜</p>
+<p>Escolha um canal e mande sua primeira mensagem!</p>
+</section>
+<div id="messages" aria-live="polite"></div>
+<form id="chatForm">
+<input id="messageInput" maxlength="500" placeholder="Escreva uma mensagem..." autocomplete="off" aria-label="Mensagem">
+<button aria-label="Enviar">➤</button>
+</form>
+<div class="note">Protótipo inicial · As mensagens ainda não são compartilhadas com outras pessoas.</div>
+</main>
+</div>
+<script>
+const messages=document.getElementById('messages');
+const input=document.getElementById('messageInput');
+const title=document.getElementById('roomTitle');
+let room='geral';
+const history={};
+function addMessage(name,text,mine=false){
+ const row=document.createElement('div');row.className='message';
+ const avatar=document.createElement('div');avatar.className='avatar';avatar.textContent=mine?'😎':'💜';
+ const body=document.createElement('div');
+ const heading=document.createElement('div');
+ const username=document.createElement('span');username.className='name';username.textContent=name;
+ const time=document.createElement('span');time.className='time';time.textContent=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+ heading.append(username,time);
+ const content=document.createElement('div');content.className='content';content.textContent=text;
+ body.append(heading,content);row.append(avatar,body);messages.append(row);
+}
+function render(){
+ messages.replaceChildren();
+ if(!history[room]||history[room].length===0){
+  addMessage('EikeLabs','Opa! Este é o canal #'+room+'. 💜');
+  addMessage('Sistema','As mensagens que você enviar aqui são apenas um teste local.');
+ }else history[room].forEach(m=>addMessage(m.name,m.text,m.mine));
+ messages.scrollTop=messages.scrollHeight;
+}
+document.getElementById('chatForm').addEventListener('submit',e=>{
+ e.preventDefault();const text=input.value.trim();if(!text)return;
+ if(!history[room])history[room]=[];
+ history[room].push({name:'Você',text,mine:true});
+ input.value='';render();input.focus();
+});
+document.querySelectorAll('.channel').forEach(el=>el.addEventListener('click',()=>{
+ document.querySelectorAll('.channel').forEach(c=>c.classList.remove('active'));
+ el.classList.add('active');room=el.dataset.room;title.textContent=room;render();
+}));
+render();
+</script>
+</body>
+</html>
